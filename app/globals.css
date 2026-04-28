@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 32% 7%;
+    --foreground: 210 40% 98%;
+    --card: 224 30% 10%;
+    --card-foreground: 210 40% 98%;
+    --popover: 224 30% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 43 74% 49%;
+    --primary-foreground: 224 32% 7%;
+    --secondary: 0 65% 30%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 224 20% 18%;
+    --muted-foreground: 215 20% 70%;
+    --accent: 43 74% 49%;
+    --accent-foreground: 224 32% 7%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 224 20% 22%;
+    --input: 224 20% 22%;
+    --ring: 43 74% 49%;
+    --radius: 0.625rem;
+  }
+}
+
+body {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(212, 175, 55, 0.08), transparent 40%),
+    radial-gradient(circle at 85% 10%, rgba(139, 26, 26, 0.12), transparent 40%),
+    linear-gradient(180deg, #0b0e1a 0%, #0a0d18 100%);
+  background-attachment: fixed;
+}
+
+.gold-text {
+  background: linear-gradient(135deg, #f3d27a 0%, #d4af37 50%, #b8860b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-border {
+  border-image: linear-gradient(135deg, #d4af37, #8b1a1a, #d4af37) 1;
+}
+
+.bracket-line {
+  position: absolute;
+  background: linear-gradient(90deg, rgba(212,175,55,0.6), rgba(212,175,55,0.2));
+}
