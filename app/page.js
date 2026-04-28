@@ -845,32 +845,9 @@ function App() {
 
       <ScoreDialog match={editing} open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSave={handleSaveScore} />
 
-      <footer className="border-t border-amber-500/20 mt-8 py-8 text-center text-xs text-slate-500">
+      <footer className="border-t border-amber-500/20 mt-8 py-6 text-center text-xs text-slate-500">
         <p>3rd APFA INT Gold Cup 2026 · TDL Bylakuppe</p>
-
-        {/* === FINAL ROUND: pick A, B, or C === */}
-        <div className="my-4 mx-auto max-w-xl space-y-5 border-y border-amber-500/10 py-6">
-          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Final Round · Pick A, B or C</p>
-
-          <div className="space-y-1.5">
-            <span className="text-amber-400 font-mono text-[10px] block">A · Wide-tracked uppercase</span>
-            <span className="block text-[11px] uppercase tracking-[0.4em] text-amber-300">Developed &amp; Managed by TCRC</span>
-          </div>
-
-          <div className="space-y-1.5">
-            <span className="text-amber-400 font-mono text-[10px] block">B · Italic with em-dashes</span>
-            <span className="block text-sm text-slate-300 italic">— Developed and managed by TCRC —</span>
-          </div>
-
-          <div className="space-y-1.5">
-            <span className="text-amber-400 font-mono text-[10px] block">C · Combined (italic em-dashes + wide tracked gold name)</span>
-            <span className="block text-sm text-slate-300 italic">
-              — Developed and managed by{' '}
-              <span className="not-italic uppercase tracking-[0.35em] text-amber-300 font-semibold ml-1">TCRC</span>{' '}—
-            </span>
-          </div>
-        </div>
-
+        <p className="my-2 text-[11px] uppercase tracking-[0.4em] text-amber-300">Developed &amp; Managed by TCRC</p>
         <p>A celebration of Tibetan football heritage</p>
       </footer>
     </div>
