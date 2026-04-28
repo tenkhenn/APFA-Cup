@@ -257,6 +257,7 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
   const [extraTime, setExtraTime] = useState(false);
   const [penA, setPenA] = useState('');
   const [penB, setPenB] = useState('');
+  const [matchDate, setMatchDate] = useState('');
 
   useEffect(() => {
     if (match) {
@@ -266,6 +267,14 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
       setExtraTime(!!match.extraTime);
       setPenA(match.penaltyScoreA ?? '');
       setPenB(match.penaltyScoreB ?? '');
+      // Convert ISO to local datetime-local input value (YYYY-MM-DDTHH:mm)
+      if (match.date) {
+        const d = new Date(match.date);
+        const tz = d.getTimezoneOffset() * 60000;
+        setMatchDate(new Date(d.getTime() - tz).toISOString().slice(0, 16));
+      } else {
+        setMatchDate('');
+      }
     }
   }, [match]);
 
@@ -281,6 +290,10 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
       scoreB: scoreB === '' ? 0 : parseInt(scoreB),
       status,
     };
+    if (matchDate) {
+      // Convert local datetime-local back to ISO
+      payload.date = new Date(matchDate).toISOString();
+    }
     if (isKnockout) {
       payload.extraTime = extraTime;
       // Only save penalty scores if tied and provided
@@ -312,7 +325,18 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
         </DialogHeader>
         <div className="space-y-4">
           <div className="text-sm text-slate-400">
-            {match.type === 'group' ? `Group ${match.group}` : match.slot} · {new Date(match.date).toLocaleString()}
+            {match.type === 'group' ? `Group ${match.group}` : match.slot}
+          </div>
+          <div>
+            <Label className="text-xs text-slate-400 flex items-center gap-1.5">
+              <Calendar className="h-3 w-3 text-amber-400" /> Match Date & Time
+            </Label>
+            <Input
+              type="datetime-local"
+              value={matchDate}
+              onChange={(e) => setMatchDate(e.target.value)}
+              className="bg-slate-900 border-slate-700 mt-1 [color-scheme:dark]"
+            />
           </div>
           <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
             <div>
