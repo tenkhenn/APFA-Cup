@@ -25,6 +25,16 @@ async function ensureSeeded(db) {
   }
 }
 
+async function buildTeamsByGroup(db) {
+  const teams = await db.collection('teams').find({}, { projection: { _id: 0, name: 1, group: 1 } }).toArray();
+  const map = {};
+  for (const t of teams) {
+    if (!map[t.group]) map[t.group] = [];
+    map[t.group].push(t.name);
+  }
+  return map;
+}
+
 async function handle(req, { params }) {
   const segments = params?.path || [];
   const path = '/' + segments.join('/');
@@ -74,15 +84,16 @@ async function handle(req, { params }) {
     // STANDINGS
     if (path === '/standings' && method === 'GET') {
       const matches = await db.collection('matches').find({}, { projection: { _id: 0 } }).toArray();
-      const standings = computeAllStandings(matches);
-      return json({ standings, groups: GROUPS });
+      const teamsByGroup = await buildTeamsByGroup(db);
+      const standings = computeAllStandings(matches, teamsByGroup);
+      return json({ standings, groups: teamsByGroup });
     }
 
     // BRACKET
     if (path === '/bracket' && method === 'GET') {
       const allMatches = await db.collection('matches').find({}, { projection: { _id: 0 } }).toArray();
-      // Live-compute synced bracket WITHOUT writing (in case admin hasn't triggered yet)
-      const synced = syncBracket(allMatches);
+      const teamsByGroup = await buildTeamsByGroup(db);
+      const synced = syncBracket(allMatches, teamsByGroup);
       const qf = synced.filter(m => m.type === 'QF').sort((a,b) => a.slot.localeCompare(b.slot));
       const sf = synced.filter(m => m.type === 'SF').sort((a,b) => a.slot.localeCompare(b.slot));
       const final = synced.find(m => m.type === 'FINAL');
@@ -111,7 +122,8 @@ async function handle(req, { params }) {
       // After updating, resync bracket if completed
       if (update.status === 'completed') {
         const allMatches = await db.collection('matches').find({}, { projection: { _id: 0 } }).toArray();
-        const synced = syncBracket(allMatches);
+        const teamsByGroup = await buildTeamsByGroup(db);
+        const synced = syncBracket(allMatches, teamsByGroup);
         // Persist team-name changes for not-yet-completed knockout matches
         const ops = [];
         for (const m of synced) {
@@ -124,6 +136,31 @@ async function handle(req, { params }) {
         if (ops.length) await db.collection('matches').bulkWrite(ops);
       }
       return json({ match: result });
+    }
+
+    // RENAME TEAM (admin) - cascades to matches
+    const teamRenameMatch = path.match(/^\/teams\/([^/]+)$/);
+    if (teamRenameMatch && method === 'PUT') {
+      if (!isAdmin(req)) return json({ error: 'Unauthorized' }, 401);
+      const id = teamRenameMatch[1];
+      const body = await req.json();
+      const newName = (body.name || '').toString().trim();
+      if (!newName) return json({ error: 'Name cannot be empty' }, 400);
+      if (newName.length > 60) return json({ error: 'Name too long (max 60 chars)' }, 400);
+      const team = await db.collection('teams').findOne({ id });
+      if (!team) return json({ error: 'Team not found' }, 404);
+      const oldName = team.name;
+      if (oldName === newName) return json({ team });
+      // Reject if another team already uses this name
+      const dup = await db.collection('teams').findOne({ name: newName, id: { $ne: id } });
+      if (dup) return json({ error: 'Another team already uses this name' }, 400);
+      // Update team
+      await db.collection('teams').updateOne({ id }, { $set: { name: newName } });
+      // Cascade rename in matches
+      await db.collection('matches').updateMany({ teamA: oldName }, { $set: { teamA: newName } });
+      await db.collection('matches').updateMany({ teamB: oldName }, { $set: { teamB: newName } });
+      const updated = await db.collection('teams').findOne({ id }, { projection: { _id: 0 } });
+      return json({ team: updated });
     }
 
     // TEAM LOGO UPLOAD (admin) - accepts base64 data URL

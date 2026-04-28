@@ -397,9 +397,13 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
   );
 }
 
-function TeamLogoUploader({ team, logos, onUploaded, onRemoved }) {
+function TeamLogoUploader({ team, logos, onUploaded, onRemoved, onRenamed }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(team.name);
+
+  useEffect(() => { setDraftName(team.name); }, [team.name]);
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -432,21 +436,62 @@ function TeamLogoUploader({ team, logos, onUploaded, onRemoved }) {
     }
   };
 
+  const handleSaveName = async () => {
+    const newName = draftName.trim();
+    if (!newName) { toast.error('Name cannot be empty'); return; }
+    if (newName === team.name) { setEditing(false); return; }
+    try {
+      await fetcher(`/api/teams/${team.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
+      toast.success(`Renamed to ${newName}`);
+      setEditing(false);
+      onRenamed && onRenamed();
+    } catch (e) {
+      toast.error(e.message || 'Rename failed');
+    }
+  };
+
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-slate-900/50">
       <TeamLogo name={team.name} logos={logos} size="lg" />
       <div className="flex-1 min-w-0">
-        <div className="font-medium truncate text-slate-100">{team.name}</div>
-        <div className="text-[11px] text-slate-500">Group {team.group}</div>
+        {editing ? (
+          <div className="flex items-center gap-2">
+            <Input
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditing(false); setDraftName(team.name); } }}
+              autoFocus
+              className="bg-slate-950 border-amber-500/40 h-8 text-sm"
+            />
+            <Button size="sm" onClick={handleSaveName} className="h-8 bg-amber-500 text-slate-950 hover:bg-amber-400 px-2.5">Save</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setDraftName(team.name); }} className="h-8 px-2 text-slate-400">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium truncate text-slate-100">{team.name}</span>
+              <button onClick={() => setEditing(true)} className="text-slate-500 hover:text-amber-300 transition-colors" title="Edit name">
+                <Pencil className="h-3 w-3" />
+              </button>
+            </div>
+            <div className="text-[11px] text-slate-500">Group {team.group}</div>
+          </>
+        )}
       </div>
-      <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
-      <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()} disabled={busy} className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 h-8 text-xs">
-        <Upload className="h-3 w-3 mr-1" /> {logos[team.name] ? 'Change' : 'Upload'}
-      </Button>
-      {logos[team.name] && (
-        <Button size="sm" variant="ghost" onClick={handleRemove} className="text-red-400 hover:bg-red-500/10 h-8 w-8 p-0">
-          <X className="h-4 w-4" />
-        </Button>
+      {!editing && (
+        <>
+          <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
+          <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()} disabled={busy} className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 h-8 text-xs">
+            <Upload className="h-3 w-3 mr-1" /> {logos[team.name] ? 'Change' : 'Upload'}
+          </Button>
+          {logos[team.name] && (
+            <Button size="sm" variant="ghost" onClick={handleRemove} className="text-red-400 hover:bg-red-500/10 h-8 w-8 p-0">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -785,7 +830,7 @@ function App() {
                         <p className="text-slate-400 text-sm mb-4">Upload a logo for any team (auto-resized to 256px, JPEG). Logos appear next to team names everywhere.</p>
                         <div className="grid sm:grid-cols-2 gap-3">
                           {sortedTeams.map(t => (
-                            <TeamLogoUploader key={t.id} team={t} logos={logos} onUploaded={refreshAll} onRemoved={refreshAll} />
+                            <TeamLogoUploader key={t.id} team={t} logos={logos} onUploaded={refreshAll} onRemoved={refreshAll} onRenamed={refreshAll} />
                           ))}
                         </div>
                       </TabsContent>
