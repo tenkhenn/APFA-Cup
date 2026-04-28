@@ -845,9 +845,74 @@ function App() {
 
       <ScoreDialog match={editing} open={!!editing} onOpenChange={(o) => !o && setEditing(null)} onSave={handleSaveScore} />
 
-      <footer className="border-t border-amber-500/20 mt-8 py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-amber-500/20 mt-8 py-8 text-center text-xs text-slate-500">
         <p>3rd APFA INT Gold Cup 2026 · TDL Bylakuppe</p>
-        <p className="my-1.5 gold-text font-semibold tracking-wider">Developed and managed by TCRC</p>
+
+        {/* === STYLE PREVIEW: Pick the one you like and tell me the number === */}
+        <div className="my-4 mx-auto max-w-xl space-y-3 border-y border-amber-500/10 py-5">
+          <p className="text-[10px] uppercase tracking-widest text-amber-300/70">Footer Style Options · Pick One</p>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">1.</span>
+            <span className="text-sm text-slate-300">Developed and managed by TCRC</span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">2.</span>
+            <span className="text-sm font-bold gold-text tracking-wider">DEVELOPED AND MANAGED BY TCRC</span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">3.</span>
+            <span className="text-sm text-slate-200 font-semibold">Developed And Managed By TCRC</span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">4.</span>
+            <span className="text-sm text-slate-400 lowercase italic">developed and managed by tcrc</span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">5.</span>
+            <span className="text-[11px] uppercase tracking-[0.4em] text-amber-300">Developed &amp; Managed by TCRC</span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">6.</span>
+            <span className="text-sm text-slate-300 italic">— Developed and managed by TCRC —</span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">7.</span>
+            <span className="text-sm text-slate-300">
+              Crafted with <span className="text-red-400">♥</span> by <span className="gold-text font-bold">TCRC</span>
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">8.</span>
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] uppercase tracking-wider text-amber-300 font-semibold">
+              <Trophy className="h-3 w-3" /> Developed &amp; Managed by TCRC
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">9.</span>
+            <span className="text-sm">
+              <span className="text-[10px] uppercase tracking-widest text-slate-500 mr-1.5">Powered by</span>
+              <span className="gold-text font-bold tracking-wider">TCRC</span>
+            </span>
+          </div>
+
+          <div className="flex items-baseline gap-3 justify-center">
+            <span className="text-amber-400 font-mono text-[10px]">10.</span>
+            <span className="text-sm">
+              <span className="text-slate-400">Developed &amp; managed by</span>{' '}
+              <span className="gold-text font-extrabold text-base tracking-wider">TCRC</span>
+            </span>
+          </div>
+        </div>
+
         <p>A celebration of Tibetan football heritage</p>
       </footer>
     </div>
