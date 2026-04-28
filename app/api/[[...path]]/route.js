@@ -100,6 +100,9 @@ async function handle(req, { params }) {
       if (body.scoreB !== undefined) update.scoreB = parseInt(body.scoreB);
       if (body.status) update.status = body.status;
       if (body.date) update.date = body.date;
+      if (body.extraTime !== undefined) update.extraTime = !!body.extraTime;
+      if (body.penaltyScoreA !== undefined) update.penaltyScoreA = body.penaltyScoreA === null || body.penaltyScoreA === '' ? null : parseInt(body.penaltyScoreA);
+      if (body.penaltyScoreB !== undefined) update.penaltyScoreB = body.penaltyScoreB === null || body.penaltyScoreB === '' ? null : parseInt(body.penaltyScoreB);
       const result = await db.collection('matches').findOneAndUpdate(
         { id },
         { $set: update },
@@ -121,6 +124,33 @@ async function handle(req, { params }) {
         if (ops.length) await db.collection('matches').bulkWrite(ops);
       }
       return json({ match: result });
+    }
+
+    // TEAM LOGO UPLOAD (admin) - accepts base64 data URL
+    const teamLogoMatch = path.match(/^\/teams\/([^/]+)\/logo$/);
+    if (teamLogoMatch && method === 'POST') {
+      if (!isAdmin(req)) return json({ error: 'Unauthorized' }, 401);
+      const id = teamLogoMatch[1];
+      const body = await req.json();
+      if (!body.logo || typeof body.logo !== 'string' || !body.logo.startsWith('data:image/')) {
+        return json({ error: 'Invalid logo data (must be image data URL)' }, 400);
+      }
+      if (body.logo.length > 400000) {
+        return json({ error: 'Logo too large (max ~250KB after base64). Please compress.' }, 400);
+      }
+      const result = await db.collection('teams').findOneAndUpdate(
+        { id },
+        { $set: { logo: body.logo } },
+        { returnDocument: 'after', projection: { _id: 0 } }
+      );
+      if (!result) return json({ error: 'Team not found' }, 404);
+      return json({ team: result });
+    }
+    if (teamLogoMatch && method === 'DELETE') {
+      if (!isAdmin(req)) return json({ error: 'Unauthorized' }, 401);
+      const id = teamLogoMatch[1];
+      await db.collection('teams').updateOne({ id }, { $unset: { logo: '' } });
+      return json({ ok: true });
     }
 
     // RESET (admin) - wipes scores back to scheduled (handy for demos)

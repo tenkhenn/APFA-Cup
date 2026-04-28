@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,10 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Trophy, Shield, LogIn, LogOut, ChevronRight, Pencil, Calendar, MapPin, Crown, Star } from 'lucide-react';
-
-const TROPHY_GOLD = '#d4af37';
+import { Trophy, Shield, LogIn, LogOut, ChevronRight, Pencil, Calendar, MapPin, Crown, Star, Upload, X, ImageIcon } from 'lucide-react';
 
 const fetcher = async (url, options = {}) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('apfa_token') : null;
@@ -24,6 +23,47 @@ const fetcher = async (url, options = {}) => {
   return data;
 };
 
+// Resize an image file client-side to keep base64 small
+function fileToCompressedDataUrl(file, maxDim = 256) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, maxDim / Math.max(width, height));
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function TeamLogo({ name, logos, size = 'sm' }) {
+  const sizes = {
+    xs: 'h-4 w-4 text-[8px]',
+    sm: 'h-6 w-6 text-[9px]',
+    md: 'h-8 w-8 text-xs',
+    lg: 'h-12 w-12 text-sm',
+  };
+  const cls = sizes[size] || sizes.sm;
+  const initials = (name || '?').split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+  if (logos && logos[name]) {
+    return <img src={logos[name]} alt={name} className={`${cls} rounded-full object-cover bg-slate-800 border border-amber-500/30 flex-shrink-0`} />;
+  }
+  return <span className={`${cls} rounded-full bg-slate-700/80 text-slate-300 inline-flex items-center justify-center font-semibold flex-shrink-0 border border-slate-600`}>{initials}</span>;
+}
+
 function StatusBadge({ status }) {
   const map = {
     scheduled: { label: 'Scheduled', cls: 'bg-slate-700/60 text-slate-200 border-slate-600' },
@@ -34,10 +74,31 @@ function StatusBadge({ status }) {
   return <Badge variant="outline" className={`${m.cls} text-[10px] tracking-wider uppercase`}>{m.label}</Badge>;
 }
 
-function MatchCard({ match, onEdit, isAdmin }) {
+function MatchResultMeta({ match }) {
+  // Show "After Extra Time", "Pens 4-3", etc.
+  if (match.status !== 'completed') return null;
+  const isDraw = match.scoreA === match.scoreB;
+  const hasPens = match.penaltyScoreA != null && match.penaltyScoreB != null;
+  if (!match.extraTime && !hasPens) return null;
+  return (
+    <div className="text-[10px] text-amber-300/80 mt-1 text-center uppercase tracking-wider">
+      {hasPens && isDraw && (
+        <span>Penalties: {match.penaltyScoreA} - {match.penaltyScoreB}</span>
+      )}
+      {match.extraTime && !hasPens && <span>After Extra Time</span>}
+      {match.extraTime && hasPens && <span> · After Extra Time</span>}
+    </div>
+  );
+}
+
+function MatchCard({ match, onEdit, isAdmin, logos }) {
   const isComplete = match.status === 'completed';
-  const winnerA = isComplete && match.scoreA > match.scoreB;
-  const winnerB = isComplete && match.scoreB > match.scoreA;
+  let winnerA = isComplete && match.scoreA > match.scoreB;
+  let winnerB = isComplete && match.scoreB > match.scoreA;
+  if (isComplete && match.scoreA === match.scoreB && match.penaltyScoreA != null && match.penaltyScoreB != null) {
+    winnerA = match.penaltyScoreA > match.penaltyScoreB;
+    winnerB = match.penaltyScoreB > match.penaltyScoreA;
+  }
   return (
     <div className="rounded-xl border border-amber-500/15 bg-gradient-to-br from-slate-900/80 to-slate-950/80 p-4 hover:border-amber-500/40 transition-all">
       <div className="flex items-center justify-between mb-3">
@@ -53,20 +114,23 @@ function MatchCard({ match, onEdit, isAdmin }) {
         <StatusBadge status={match.status} />
       </div>
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <div className={`text-right font-semibold truncate ${winnerA ? 'text-amber-300' : 'text-slate-100'}`}>
-          {winnerA && <Crown className="h-3.5 w-3.5 inline mr-1 text-amber-400" />}
-          {match.teamA}
+        <div className={`flex items-center justify-end gap-2 font-semibold truncate ${winnerA ? 'text-amber-300' : 'text-slate-100'}`}>
+          {winnerA && <Crown className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />}
+          <span className="truncate">{match.teamA}</span>
+          <TeamLogo name={match.teamA} logos={logos} size="sm" />
         </div>
         <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-black/40 border border-amber-500/20 min-w-[80px] justify-center">
           <span className={`text-2xl font-bold tabular-nums ${winnerA ? 'text-amber-300' : 'text-slate-100'}`}>{match.scoreA ?? '-'}</span>
           <span className="text-slate-500 text-sm">:</span>
           <span className={`text-2xl font-bold tabular-nums ${winnerB ? 'text-amber-300' : 'text-slate-100'}`}>{match.scoreB ?? '-'}</span>
         </div>
-        <div className={`font-semibold truncate ${winnerB ? 'text-amber-300' : 'text-slate-100'}`}>
-          {match.teamB}
-          {winnerB && <Crown className="h-3.5 w-3.5 inline ml-1 text-amber-400" />}
+        <div className={`flex items-center gap-2 font-semibold truncate ${winnerB ? 'text-amber-300' : 'text-slate-100'}`}>
+          <TeamLogo name={match.teamB} logos={logos} size="sm" />
+          <span className="truncate">{match.teamB}</span>
+          {winnerB && <Crown className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />}
         </div>
       </div>
+      <MatchResultMeta match={match} />
       {isAdmin && (
         <div className="mt-3 flex justify-end">
           <Button size="sm" variant="outline" onClick={() => onEdit(match)} className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10">
@@ -78,7 +142,7 @@ function MatchCard({ match, onEdit, isAdmin }) {
   );
 }
 
-function GroupTable({ group, rows }) {
+function GroupTable({ group, rows, logos }) {
   return (
     <Card className="bg-slate-900/60 border-amber-500/20 overflow-hidden">
       <CardHeader className="pb-3 bg-gradient-to-r from-red-950/60 via-slate-900/40 to-amber-950/30 border-b border-amber-500/20">
@@ -114,8 +178,11 @@ function GroupTable({ group, rows }) {
                     <span className={`inline-flex items-center justify-center h-5 w-5 rounded text-[10px] font-bold ${idx === 0 ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300'}`}>{idx + 1}</span>
                   </td>
                   <td className="px-2 py-2.5 font-medium text-slate-100 whitespace-nowrap">
-                    {idx === 0 && <Star className="h-3 w-3 inline mr-1 text-amber-400 fill-amber-400" />}
-                    {r.team}
+                    <span className="inline-flex items-center gap-2">
+                      <TeamLogo name={r.team} logos={logos} size="sm" />
+                      <span>{r.team}</span>
+                      {idx === 0 && <Star className="h-3 w-3 text-amber-400 fill-amber-400" />}
+                    </span>
                   </td>
                   <td className="text-center px-1.5 py-2.5 text-slate-300">{r.played}</td>
                   <td className="text-center px-1.5 py-2.5 text-slate-300">{r.won}</td>
@@ -135,10 +202,14 @@ function GroupTable({ group, rows }) {
   );
 }
 
-function BracketMatch({ match, onEdit, isAdmin, highlight }) {
+function BracketMatch({ match, onEdit, isAdmin, highlight, logos }) {
   const isComplete = match?.status === 'completed';
-  const winnerA = isComplete && match.scoreA > match.scoreB;
-  const winnerB = isComplete && match.scoreB > match.scoreA;
+  let winnerA = isComplete && match.scoreA > match.scoreB;
+  let winnerB = isComplete && match.scoreB > match.scoreA;
+  if (isComplete && match.scoreA === match.scoreB && match.penaltyScoreA != null && match.penaltyScoreB != null) {
+    winnerA = match.penaltyScoreA > match.penaltyScoreB;
+    winnerB = match.penaltyScoreB > match.penaltyScoreA;
+  }
   return (
     <div className={`rounded-lg border ${highlight ? 'border-amber-400/60 shadow-[0_0_20px_rgba(212,175,55,0.2)]' : 'border-amber-500/20'} bg-gradient-to-br from-slate-900 to-slate-950 p-2.5 w-full`}>
       <div className="flex items-center justify-between mb-1.5">
@@ -146,13 +217,30 @@ function BracketMatch({ match, onEdit, isAdmin, highlight }) {
         {match && <StatusBadge status={match.status} />}
       </div>
       <div className={`flex items-center justify-between py-1 px-2 rounded ${winnerA ? 'bg-amber-500/10' : ''}`}>
-        <span className={`text-xs sm:text-sm font-medium truncate ${winnerA ? 'text-amber-300' : 'text-slate-200'}`}>{match?.teamA || 'TBD'}</span>
-        <span className={`tabular-nums text-sm font-bold ml-2 ${winnerA ? 'text-amber-300' : 'text-slate-300'}`}>{match?.scoreA ?? '-'}</span>
+        <span className="flex items-center gap-2 min-w-0">
+          <TeamLogo name={match?.teamA} logos={logos} size="xs" />
+          <span className={`text-xs sm:text-sm font-medium truncate ${winnerA ? 'text-amber-300' : 'text-slate-200'}`}>{match?.teamA || 'TBD'}</span>
+        </span>
+        <span className={`tabular-nums text-sm font-bold ml-2 ${winnerA ? 'text-amber-300' : 'text-slate-300'}`}>
+          {match?.scoreA ?? '-'}
+          {match?.penaltyScoreA != null && <sup className="text-[9px] text-amber-400 ml-0.5">({match.penaltyScoreA})</sup>}
+        </span>
       </div>
       <div className={`flex items-center justify-between py-1 px-2 rounded mt-0.5 ${winnerB ? 'bg-amber-500/10' : ''}`}>
-        <span className={`text-xs sm:text-sm font-medium truncate ${winnerB ? 'text-amber-300' : 'text-slate-200'}`}>{match?.teamB || 'TBD'}</span>
-        <span className={`tabular-nums text-sm font-bold ml-2 ${winnerB ? 'text-amber-300' : 'text-slate-300'}`}>{match?.scoreB ?? '-'}</span>
+        <span className="flex items-center gap-2 min-w-0">
+          <TeamLogo name={match?.teamB} logos={logos} size="xs" />
+          <span className={`text-xs sm:text-sm font-medium truncate ${winnerB ? 'text-amber-300' : 'text-slate-200'}`}>{match?.teamB || 'TBD'}</span>
+        </span>
+        <span className={`tabular-nums text-sm font-bold ml-2 ${winnerB ? 'text-amber-300' : 'text-slate-300'}`}>
+          {match?.scoreB ?? '-'}
+          {match?.penaltyScoreB != null && <sup className="text-[9px] text-amber-400 ml-0.5">({match.penaltyScoreB})</sup>}
+        </span>
       </div>
+      {match?.extraTime && (
+        <div className="text-[9px] text-amber-300/70 text-center mt-1 uppercase tracking-wider">
+          {match.penaltyScoreA != null ? 'AET · Pens' : 'After Extra Time'}
+        </div>
+      )}
       {isAdmin && match && (
         <Button size="sm" variant="ghost" onClick={() => onEdit(match)} className="mt-1.5 h-6 text-[10px] w-full text-amber-300 hover:bg-amber-500/10">
           <Pencil className="h-2.5 w-2.5 mr-1" /> Edit
@@ -166,20 +254,59 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
   const [scoreA, setScoreA] = useState('');
   const [scoreB, setScoreB] = useState('');
   const [status, setStatus] = useState('scheduled');
+  const [extraTime, setExtraTime] = useState(false);
+  const [penA, setPenA] = useState('');
+  const [penB, setPenB] = useState('');
 
   useEffect(() => {
     if (match) {
       setScoreA(match.scoreA ?? '');
       setScoreB(match.scoreB ?? '');
       setStatus(match.status || 'scheduled');
+      setExtraTime(!!match.extraTime);
+      setPenA(match.penaltyScoreA ?? '');
+      setPenB(match.penaltyScoreB ?? '');
     }
   }, [match]);
 
   if (!match) return null;
 
+  const isKnockout = match.type !== 'group';
+  const isTied = scoreA !== '' && scoreB !== '' && parseInt(scoreA) === parseInt(scoreB);
+  const showPenalties = isKnockout && status === 'completed' && isTied;
+
+  const submit = () => {
+    const payload = {
+      scoreA: scoreA === '' ? 0 : parseInt(scoreA),
+      scoreB: scoreB === '' ? 0 : parseInt(scoreB),
+      status,
+    };
+    if (isKnockout) {
+      payload.extraTime = extraTime;
+      // Only save penalty scores if tied and provided
+      if (showPenalties && penA !== '' && penB !== '') {
+        payload.penaltyScoreA = parseInt(penA);
+        payload.penaltyScoreB = parseInt(penB);
+      } else {
+        // Clear pens if not applicable
+        payload.penaltyScoreA = null;
+        payload.penaltyScoreB = null;
+      }
+    }
+    if (isKnockout && status === 'completed' && isTied && (penA === '' || penB === '')) {
+      toast.error('Knockout match is tied — please enter penalty shootout scores.');
+      return;
+    }
+    if (isKnockout && status === 'completed' && isTied && parseInt(penA) === parseInt(penB)) {
+      toast.error('Penalty shootout cannot end in a tie.');
+      return;
+    }
+    onSave(payload);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-950 border-amber-500/30 text-slate-100">
+      <DialogContent className="bg-slate-950 border-amber-500/30 text-slate-100 max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-amber-300">Update Match Score</DialogTitle>
         </DialogHeader>
@@ -189,12 +316,12 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
           </div>
           <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
             <div>
-              <Label className="text-xs text-slate-400">{match.teamA}</Label>
+              <Label className="text-xs text-slate-400 truncate block">{match.teamA}</Label>
               <Input type="number" min="0" value={scoreA} onChange={(e) => setScoreA(e.target.value)} className="bg-slate-900 border-slate-700 text-2xl text-center font-bold mt-1 h-14" />
             </div>
             <span className="text-2xl font-bold text-slate-500 pb-3">:</span>
             <div>
-              <Label className="text-xs text-slate-400">{match.teamB}</Label>
+              <Label className="text-xs text-slate-400 truncate block">{match.teamB}</Label>
               <Input type="number" min="0" value={scoreB} onChange={(e) => setScoreB(e.target.value)} className="bg-slate-900 border-slate-700 text-2xl text-center font-bold mt-1 h-14" />
             </div>
           </div>
@@ -209,26 +336,105 @@ function ScoreDialog({ match, open, onOpenChange, onSave }) {
               </SelectContent>
             </Select>
           </div>
+
+          {isKnockout && status === 'completed' && (
+            <div className="border-t border-slate-800 pt-3 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox checked={extraTime} onCheckedChange={(v) => setExtraTime(!!v)} className="border-amber-500/50 data-[state=checked]:bg-amber-500 data-[state=checked]:text-slate-950" />
+                <span className="text-sm text-slate-200">Match went to Extra Time</span>
+              </label>
+
+              {showPenalties && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                  <Label className="text-xs text-amber-300 uppercase tracking-wider">Penalty Shootout</Label>
+                  <p className="text-[11px] text-slate-400 mb-2">Match is tied — enter penalty shootout final score</p>
+                  <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
+                    <div>
+                      <Label className="text-[10px] text-slate-400 truncate block">{match.teamA} Pens</Label>
+                      <Input type="number" min="0" value={penA} onChange={(e) => setPenA(e.target.value)} className="bg-slate-900 border-amber-500/40 text-lg text-center font-bold mt-1 h-11" />
+                    </div>
+                    <span className="text-lg font-bold text-amber-400 pb-2">:</span>
+                    <div>
+                      <Label className="text-[10px] text-slate-400 truncate block">{match.teamB} Pens</Label>
+                      <Input type="number" min="0" value={penB} onChange={(e) => setPenB(e.target.value)} className="bg-slate-900 border-amber-500/40 text-lg text-center font-bold mt-1 h-11" />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            onClick={() => onSave({ scoreA: scoreA === '' ? 0 : parseInt(scoreA), scoreB: scoreB === '' ? 0 : parseInt(scoreB), status })}
-            className="bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold"
-          >
-            Save
-          </Button>
+          <Button onClick={submit} className="bg-amber-500 text-slate-950 hover:bg-amber-400 font-semibold">Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
 
+function TeamLogoUploader({ team, logos, onUploaded, onRemoved }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    setBusy(true);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file, 256);
+      await fetcher(`/api/teams/${team.id}/logo`, { method: 'POST', body: JSON.stringify({ logo: dataUrl }) });
+      toast.success(`Logo updated for ${team.name}`);
+      onUploaded();
+    } catch (e) {
+      toast.error(e.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!confirm(`Remove logo for ${team.name}?`)) return;
+    try {
+      await fetcher(`/api/teams/${team.id}/logo`, { method: 'DELETE' });
+      toast.success('Logo removed');
+      onRemoved();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-800 bg-slate-900/50">
+      <TeamLogo name={team.name} logos={logos} size="lg" />
+      <div className="flex-1 min-w-0">
+        <div className="font-medium truncate text-slate-100">{team.name}</div>
+        <div className="text-[11px] text-slate-500">Group {team.group}</div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
+      <Button size="sm" variant="outline" onClick={() => inputRef.current?.click()} disabled={busy} className="border-amber-500/40 text-amber-300 hover:bg-amber-500/10 h-8 text-xs">
+        <Upload className="h-3 w-3 mr-1" /> {logos[team.name] ? 'Change' : 'Upload'}
+      </Button>
+      {logos[team.name] && (
+        <Button size="sm" variant="ghost" onClick={handleRemove} className="text-red-400 hover:bg-red-500/10 h-8 w-8 p-0">
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function App() {
   const [tab, setTab] = useState('home');
+  const [adminSubTab, setAdminSubTab] = useState('matches');
   const [standings, setStandings] = useState({});
   const [matches, setMatches] = useState([]);
   const [bracket, setBracket] = useState({ qf: [], sf: [], final: null });
+  const [teams, setTeams] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loginUser, setLoginUser] = useState('');
   const [loginPass, setLoginPass] = useState('');
@@ -236,16 +442,24 @@ function App() {
   const [matchFilter, setMatchFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
 
+  const logos = useMemo(() => {
+    const map = {};
+    for (const t of teams) if (t.logo) map[t.name] = t.logo;
+    return map;
+  }, [teams]);
+
   const refreshAll = async () => {
     try {
-      const [s, m, b] = await Promise.all([
+      const [s, m, b, t] = await Promise.all([
         fetcher('/api/standings'),
         fetcher('/api/matches'),
         fetcher('/api/bracket'),
+        fetcher('/api/teams'),
       ]);
       setStandings(s.standings || {});
       setMatches(m.matches || []);
       setBracket(b);
+      setTeams(t.teams || []);
     } catch (e) {
       console.error(e);
     }
@@ -253,11 +467,11 @@ function App() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const t = localStorage.getItem('apfa_token');
-      if (t) setIsAdmin(true);
+      const tok = localStorage.getItem('apfa_token');
+      if (tok) setIsAdmin(true);
     }
     refreshAll();
-    const interval = setInterval(refreshAll, 15000); // auto-refresh for live feel
+    const interval = setInterval(refreshAll, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -279,9 +493,9 @@ function App() {
     toast.info('Logged out');
   };
 
-  const handleSaveScore = async ({ scoreA, scoreB, status }) => {
+  const handleSaveScore = async (payload) => {
     try {
-      await fetcher(`/api/matches/${editing.id}`, { method: 'PUT', body: JSON.stringify({ scoreA, scoreB, status }) });
+      await fetcher(`/api/matches/${editing.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       toast.success('Match updated!');
       setEditing(null);
       await refreshAll();
@@ -313,8 +527,10 @@ function App() {
   const recentResults = matches.filter(m => m.status === 'completed').slice(-3).reverse();
   const upcoming = matches.filter(m => m.status === 'scheduled').slice(0, 3);
 
+  const sortedTeams = useMemo(() => [...teams].sort((a, b) => (a.group || '').localeCompare(b.group || '') || a.name.localeCompare(b.name)), [teams]);
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       {/* HEADER */}
       <header className="border-b border-amber-500/20 bg-gradient-to-r from-red-950/80 via-slate-950 to-red-950/80 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
@@ -339,7 +555,7 @@ function App() {
         </div>
       </header>
 
-      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 flex-1">
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="grid grid-cols-4 sm:grid-cols-5 w-full bg-slate-900/60 border border-amber-500/20">
             <TabsTrigger value="home" className="data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950 text-xs sm:text-sm">Home</TabsTrigger>
@@ -380,7 +596,7 @@ function App() {
                   Live Now
                 </h3>
                 <div className="grid sm:grid-cols-2 gap-3">
-                  {liveMatches.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} />)}
+                  {liveMatches.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} logos={logos} />)}
                 </div>
               </section>
             )}
@@ -389,14 +605,14 @@ function App() {
               <h3 className="text-sm uppercase tracking-widest text-amber-300 mb-3">Recent Results</h3>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {recentResults.length === 0 && <div className="text-slate-500 text-sm col-span-3">No matches completed yet.</div>}
-                {recentResults.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} />)}
+                {recentResults.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} logos={logos} />)}
               </div>
             </section>
 
             <section>
               <h3 className="text-sm uppercase tracking-widest text-amber-300 mb-3">Upcoming Matches</h3>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {upcoming.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} />)}
+                {upcoming.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} logos={logos} />)}
               </div>
             </section>
           </TabsContent>
@@ -405,7 +621,7 @@ function App() {
           <TabsContent value="standings" className="mt-6">
             <div className="grid lg:grid-cols-2 gap-4">
               {Object.keys(standings).sort().map(g => (
-                <GroupTable key={g} group={g} rows={standings[g] || []} />
+                <GroupTable key={g} group={g} rows={standings[g] || []} logos={logos} />
               ))}
             </div>
           </TabsContent>
@@ -419,36 +635,39 @@ function App() {
               <CardContent>
                 <div className="overflow-x-auto pb-4">
                   <div className="min-w-[700px] grid grid-cols-4 gap-4 sm:gap-6">
-                    {/* QF */}
                     <div className="space-y-3 sm:space-y-6 flex flex-col justify-around">
                       <div className="text-center text-xs uppercase tracking-widest text-amber-300 mb-1">Quarter Finals</div>
                       {bracket.qf.map(m => (
-                        <BracketMatch key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} />
+                        <BracketMatch key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} logos={logos} />
                       ))}
                     </div>
-                    {/* SF */}
                     <div className="space-y-3 flex flex-col justify-around">
                       <div className="text-center text-xs uppercase tracking-widest text-amber-300 mb-1">Semi Finals</div>
                       {bracket.sf.map(m => (
                         <div key={m.id} className="my-auto">
-                          <BracketMatch match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} />
+                          <BracketMatch match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} logos={logos} />
                         </div>
                       ))}
                     </div>
-                    {/* FINAL */}
                     <div className="flex flex-col justify-center">
                       <div className="text-center text-xs uppercase tracking-widest text-amber-300 mb-1">Final</div>
-                      {bracket.final && <BracketMatch match={bracket.final} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} highlight />}
+                      {bracket.final && <BracketMatch match={bracket.final} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} highlight logos={logos} />}
                     </div>
-                    {/* CHAMPION */}
                     <div className="flex flex-col justify-center items-center">
                       <div className="text-center text-xs uppercase tracking-widest text-amber-300 mb-1">Champion</div>
                       <div className="rounded-xl border-2 border-amber-400 bg-gradient-to-br from-amber-500/20 to-red-900/20 p-4 w-full text-center shadow-[0_0_30px_rgba(212,175,55,0.3)]">
                         <Trophy className="h-8 w-8 text-amber-400 mx-auto mb-2" />
-                        <div className="font-bold gold-text text-lg">
-                          {bracket.final?.status === 'completed'
-                            ? (bracket.final.scoreA > bracket.final.scoreB ? bracket.final.teamA : bracket.final.teamB)
-                            : 'TBD'}
+                        <div className="font-bold gold-text text-lg break-words">
+                          {(() => {
+                            const f = bracket.final;
+                            if (!f || f.status !== 'completed') return 'TBD';
+                            if (f.scoreA > f.scoreB) return f.teamA;
+                            if (f.scoreB > f.scoreA) return f.teamB;
+                            if (f.penaltyScoreA != null && f.penaltyScoreB != null) {
+                              return f.penaltyScoreA > f.penaltyScoreB ? f.teamA : f.teamB;
+                            }
+                            return 'TBD';
+                          })()}
                         </div>
                         <div className="text-[10px] text-slate-400 mt-1">Gold Cup 2026</div>
                       </div>
@@ -483,7 +702,7 @@ function App() {
               )}
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              {filteredMatches.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} />)}
+              {filteredMatches.map(m => <MatchCard key={m.id} match={m} isAdmin={isAdmin} onEdit={(mm) => setEditing(mm)} logos={logos} />)}
             </div>
           </TabsContent>
 
@@ -516,15 +735,37 @@ function App() {
             ) : (
               <div className="space-y-4">
                 <Card className="bg-slate-900/60 border-amber-500/20">
-                  <CardHeader className="flex-row items-center justify-between">
+                  <CardHeader className="flex-row items-center justify-between flex">
                     <CardTitle className="gold-text">Admin Panel</CardTitle>
                     <Button onClick={handleReset} variant="outline" size="sm" className="border-red-500/50 text-red-300 hover:bg-red-500/10">Reset Tournament</Button>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-slate-400 text-sm mb-4">Tap any match to update its score. The standings table & knockout bracket auto-refresh.</p>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      {matches.map(m => <MatchCard key={m.id} match={m} isAdmin onEdit={(mm) => setEditing(mm)} />)}
-                    </div>
+                    <Tabs value={adminSubTab} onValueChange={setAdminSubTab}>
+                      <TabsList className="grid grid-cols-2 w-full sm:w-auto sm:inline-grid bg-slate-950 border border-slate-800">
+                        <TabsTrigger value="matches" className="data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950">
+                          <Pencil className="h-3.5 w-3.5 mr-1" /> Match Scores
+                        </TabsTrigger>
+                        <TabsTrigger value="teams" className="data-[state=active]:bg-amber-500 data-[state=active]:text-slate-950">
+                          <ImageIcon className="h-3.5 w-3.5 mr-1" /> Team Logos
+                        </TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="matches" className="mt-4">
+                        <p className="text-slate-400 text-sm mb-4">Tap any match to update its score. Knockout matches support extra time and penalty shootouts. Standings & bracket auto-update.</p>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {matches.map(m => <MatchCard key={m.id} match={m} isAdmin onEdit={(mm) => setEditing(mm)} logos={logos} />)}
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="teams" className="mt-4">
+                        <p className="text-slate-400 text-sm mb-4">Upload a logo for any team (auto-resized to 256px, JPEG). Logos appear next to team names everywhere.</p>
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {sortedTeams.map(t => (
+                            <TeamLogoUploader key={t.id} team={t} logos={logos} onUploaded={refreshAll} onRemoved={refreshAll} />
+                          ))}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </CardContent>
                 </Card>
               </div>
@@ -537,7 +778,8 @@ function App() {
 
       <footer className="border-t border-amber-500/20 mt-8 py-6 text-center text-xs text-slate-500">
         <p>3rd APFA INT Gold Cup 2026 · TDL Bylakuppe</p>
-        <p className="mt-1">A celebration of Tibetan football heritage</p>
+        <p className="my-1.5 gold-text font-semibold tracking-wider">Developed and managed by TCRC</p>
+        <p>A celebration of Tibetan football heritage</p>
       </footer>
     </div>
   );
